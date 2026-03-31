@@ -1,0 +1,11 @@
+# 2021/04/08
+# ref https://qiita.com/tatamyiwathy/items/d1de6e998f347c0264b3
+# mute bell: tested on Ubuntu on WSL
+set bell-style none
+
+#↑を設定するとHome,Endキーが機能しなくなる場合がある。
+#その場合、以下のキーバインド設定を追加する。
+"\e[1~": beginning-of-line
+"\e[4~": end-of-line
+
+

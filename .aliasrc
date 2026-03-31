@@ -1,0 +1,15 @@
+# Last updated : 2026-04-01
+
+
+# alias
+case "$(uname)" in
+  "Linux")
+    alias ls='ls --color=auto'
+    ;;
+  "Darwin")
+    alias ls='ls -G -F'
+    ;;
+esac
+
+alias less='less -rfS'
+
