@@ -32,16 +32,18 @@ zstyle ':completion:*' matcher-list 'm:{a-z}={A-Z}'
 
 # 履歴保存管理
 HISTFILE=$HOME/.zsh-history
-HISTSIZE=1000
-SAVEHIST=1000
+HISTSIZE=10000
+SAVEHIST=10000
 
 # 便利なオプション
 setopt auto_cd              # ディレクトリ名のみでcdする
 setopt auto_pushd           # cd時にディレクトリスタックにプッシュ
 setopt pushd_ignore_dups    # 重複したディレクトリをスタックに追加しない
 setopt share_history        # 複数のzshセッション間でヒストリを共有
-setopt hist_ignore_dups     # 直前と同じコマンドをヒストリに追加しない
+setopt hist_ignore_all_dups # 重複したコマンドをヒストリから削除
 setopt hist_ignore_space    # スペースで始まるコマンドをヒストリに追加しない
+setopt hist_reduce_blanks   # 余分な空白を削除して記録
+setopt extended_history     # 実行時刻を記録
 setopt extended_glob        # 拡張グロブを有効化
 setopt transient_rprompt    # コマンド実行時に右プロンプトを消す
 

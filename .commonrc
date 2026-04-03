@@ -9,6 +9,11 @@ if [ -f "${HOME}/.aliasrc" ]; then
   source "${HOME}/.aliasrc"
 fi
 
+# source .privaterc if it exists (Private keys, API tokens, etc.)
+if [ -f "${HOME}/.privaterc" ]; then
+  source "${HOME}/.privaterc"
+fi
+
 # Set PATH so it includes user's private bin if it exists
 if [ -d "${HOME}/bin" ]; then
   PATH="${HOME}/bin:${PATH}"
