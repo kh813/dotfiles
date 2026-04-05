@@ -32,8 +32,8 @@ zstyle ':completion:*' matcher-list 'm:{a-z}={A-Z}'
 
 # 履歴保存管理
 HISTFILE=$HOME/.zsh-history
-HISTSIZE=10000
-SAVEHIST=10000
+HISTSIZE=2000
+SAVEHIST=2000
 
 # 便利なオプション
 setopt auto_cd              # ディレクトリ名のみでcdする

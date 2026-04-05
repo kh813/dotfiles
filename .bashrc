@@ -1,4 +1,4 @@
-# .bashrc : 2026/04/01
+# .bashrc : 2026/04/05
 
 # If not running interactively, don't do anything
 [[ "$-" != *i* ]] && return
@@ -9,64 +9,61 @@ if [ -f "${HOME}/.commonrc" ]; then
 fi
 
 
-# --- PROMPT (Zsh-like Right Side: Final Fix for Mac) ---
-# PS1用の色定義
+# --- PROMPT ---
 blue_p="\[\e[34m\]"
 green_p="\[\e[32m\]"
 reset_p="\[\e[0m\]"
 
 build_prompt() {
-  local exit_status=$?
   local symbol="$"
   [[ $UID -eq 0 ]] && symbol="#"
-
-  # 右側の文字列を準備
-  local cur_dir="${PWD/#$HOME/~}"
+  local cur_dir="${PWD/$HOME/\~}"
   local r_str="[ $cur_dir ]"
-  # 文字列の長さを取得
   local r_len=${#r_str}
-
-  # --- 右端吸着マジック ---
-  # \033[999C : カーソルを右端(999列目)まで移動
-  # \033[${r_len}D : 文字列の長さ分だけ左(D)に戻る
-  # これにより、文字数に関わらず最後の一文字が右端にピタリと止まります
   printf "\n\033[999C\033[${r_len}D\033[33m%s\033[0m\r" "$r_str"
-
   PS1="${blue_p}\u${reset_p}@${green_p}\h${reset_p} ${symbol} "
 }
 PROMPT_COMMAND=build_prompt
 
+# OSごとのプロンプト設定
+if [ "Linux" = "$(uname)" ]; then
+  # Linux (Bash 4+): DEBUGトラップをbuild_promptの外で永続設定
+  # コマンド実行直前に右プロンプト行（1行上）を消去する
+  _rprompt_erase() {
+    # PROMPT_COMMAND自身の実行はトラップしない
+    [[ "${BASH_COMMAND}" == "build_prompt" ]] && return
+    echo -ne "\e[1A\e[2K\r"
+  }
+  trap '_rprompt_erase' DEBUG
+
+elif [ "Darwin" = "$(uname)" ]; then
+  # Mac (Bash 3.2): build_promptをそのまま使用
+  # DEBUGトラップはBash 3.2では動作が不安定なため使わない
+  # → 右プロンプトは「残る」仕様とする（消去は行わない）
+  export BASH_SILENCE_DEPRECATION_WARNING=1
+  
+  # cleanprompt で右プロンプトなしに切替、dirprompt で元に戻す
+  hideprompt() { PROMPT_COMMAND=''; PS1="${blue_p}\u${reset_p}@${green_p}\h${reset_p} \$ "; }
+  showprompt()   { PROMPT_COMMAND=build_prompt; }
+
+elif [[ "$(uname)" = MINGW* ]]; then
+  :
+fi
+# --- End PROMPT ---
+
+
+# OSごとの設定
+if [ "Linux" = "$(uname)" ]; then
+  :
+elif [ "Darwin" = "$(uname)" ]; then
+  :
+elif [[ "$(uname)" = MINGW* ]]; then
+  :
+fi
 
 # bash固有の補完設定
 if [ -f /etc/bash_completion ]; then
   . /etc/bash_completion
-fi
-
-# OS固有の設定
-if [ "Linux" = "$(uname)" ]; then
-  # --- Linux (Bash 5.x+) 限定: 右プロンプト消去プロトコル ---
-  build_prompt() {
-    local cols=$(tput cols)
-    local cur_dir="${PWD/#$HOME/~}"
-    local r_str="[ $cur_dir ]"
-    
-    # DEBUGトラップ: コマンド実行直前に実行される
-    # 1行上(1A)に移動し、行末まで消去(K)して、行頭に戻る(\r)
-    trap 'echo -ne "\e[1A\e[K\r"; trap - DEBUG' DEBUG
-
-    # 右寄せでパスを表示し、行頭に戻って左プロンプトを重ねる
-    printf "\n\033[33m%${cols}s\033[0m\r" "$r_str"
-    PS1="\[\e[34m\]\u\[\e[0m\]\[\e[32m\]@\h\[\e[0m\] $ "
-  }
-  PROMPT_COMMAND=build_prompt
-
-elif [ "Darwin" = "$(uname)" ]; then
-  # Mac (Bash 3.2) は安定性を優先した標準のbuild_promptを使用（事前定義されている前提）
-  export BASH_SILENCE_DEPRECATION_WARNING=1
-  # ※ Mac用のbuild_prompt関数は別途共通部分に記述しておいてください
-
-elif [[ "$(uname)" = MINGW* ]]; then
-  :
 fi
 
 # -- common options -------------------------------------------------
