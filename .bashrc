@@ -43,8 +43,8 @@ elif [ "Darwin" = "$(uname)" ]; then
   export BASH_SILENCE_DEPRECATION_WARNING=1
   
   # cleanprompt で右プロンプトなしに切替、dirprompt で元に戻す
-  hideprompt() { PROMPT_COMMAND=''; PS1="${blue_p}\u${reset_p}@${green_p}\h${reset_p} \$ "; }
-  showprompt()   { PROMPT_COMMAND=build_prompt; }
+  hidepwd() { PROMPT_COMMAND=''; PS1="${blue_p}\u${reset_p}@${green_p}\h${reset_p} \$ "; }
+  showpwd()   { PROMPT_COMMAND=build_prompt; }
 
 elif [[ "$(uname)" = MINGW* ]]; then
   :
