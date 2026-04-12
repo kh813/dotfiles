@@ -166,6 +166,15 @@ fi
 # ディレクトリ履歴ファイル
 export CDHIST_FILE="$HOME/.cdhist"
 
+# 外部コマンドのパスを明示（サブシェル起動時のPATH未設定対策）
+__cdhist_ensure_path() {
+  case ":$PATH:" in
+    *:/usr/bin:*) ;;
+    *) export PATH="/usr/bin:/bin:/usr/sbin:/sbin:$PATH" ;;
+  esac
+}
+__cdhist_ensure_path
+
 # 履歴追加（重複削除＋最新を末尾へ）
 __cdhist_add() {
   [ -d "$PWD" ] || return
@@ -178,15 +187,11 @@ __cdhist_add() {
   # ファイルが無ければ作成
   [ -f "$CDHIST_FILE" ] || touch "$CDHIST_FILE"
 
-  # 既存から削除して末尾へ
+  # 既存から削除して末尾へ追加し、30件に制限
   local tmp="${CDHIST_FILE}.$$"
-  grep -vxF "$PWD" "$CDHIST_FILE" > "$tmp" 2>/dev/null
-  echo "$PWD" >> "$tmp"
-  mv "$tmp" "$CDHIST_FILE"
-
-  # 履歴サイズ制限（30件）
-  local tmp="${CDHIST_FILE}.$$"
-  tail -n 30 "$CDHIST_FILE" > "$tmp" && mv "$tmp" "$CDHIST_FILE"
+  { /usr/bin/grep -vxF "$PWD" "$CDHIST_FILE" 2>/dev/null
+    echo "$PWD"
+  } | /usr/bin/tail -n 30 > "$tmp" && mv "$tmp" "$CDHIST_FILE"
 }
 
 # bash: PROMPT_COMMANDに追加
@@ -222,40 +227,41 @@ cd() {
   fi
 
   # 履歴検索（複数ワード対応・最新優先）
-  local dest pattern
-  pattern="$*"
-
-  dest=$(grep -i "$pattern" "$CDHIST_FILE" 2>/dev/null | tail -n 1)
+  local dest
+  dest=$(/usr/bin/grep -i "$*" "$CDHIST_FILE" 2>/dev/null | /usr/bin/tail -n 1)
 
   if [ -n "$dest" ]; then
     builtin cd "$dest" || return
   else
-    echo "cd: no match for '$pattern'"
+    echo "cd: no match for '$*'"
     return 1
   fi
 }
 
 # z コマンド（ジャンプ）
 z() {
+  __cdhist_ensure_path 
   if [ $# -eq 0 ]; then
     cd ~; return
   fi
 
-  local pattern dest
+  local dest
 
   # 数字なら直接参照
-  if [[ "$1" =~ ^[0-9]+$ ]]; then
-    dest=$(sed -n "${1}p" "$CDHIST_FILE")
-    [ -n "$dest" ] && cd "$dest" && return
-  fi
+  case "$1" in
+    ''|*[!0-9]*)  ;;
+    *)
+      dest=$(/usr/bin/sed -n "${1}p" "$CDHIST_FILE")
+      [ -n "$dest" ] && cd "$dest" && return
+      ;;
+  esac
 
-  pattern="$*"
-  dest=$(grep -i "$pattern" "$CDHIST_FILE" 2>/dev/null | tail -n 1)
+  dest=$(/usr/bin/grep -i "$*" "$CDHIST_FILE" 2>/dev/null | /usr/bin/tail -n 1)
 
   if [ -n "$dest" ]; then
     cd "$dest"
   else
-    echo "z: no match for '$pattern'"
+    echo "z: no match for '$*'"
     return 1
   fi
 }
@@ -278,7 +284,13 @@ za() {
     return 1
   fi
 
-  grep -qxF "$dir" "$CDHIST_FILE" 2>/dev/null || echo "$dir" >> "$CDHIST_FILE"
+  # 重複チェック＋30件制限
+  if ! /usr/bin/grep -qxF "$dir" "$CDHIST_FILE" 2>/dev/null; then
+    local tmp="${CDHIST_FILE}.$$"
+    { cat "$CDHIST_FILE" 2>/dev/null
+      echo "$dir"
+    } | /usr/bin/tail -n 30 > "$tmp" && mv "$tmp" "$CDHIST_FILE"
+  fi
 }
 
 # zl コマンド（一覧）
@@ -308,7 +320,7 @@ zd() {
   select target in "${list[@]}"; do
     if [ -n "$target" ]; then
       local tmp="${CDHIST_FILE}.$$"
-      grep -vxF "$target" "$CDHIST_FILE" > "$tmp" && mv "$tmp" "$CDHIST_FILE"
+      /usr/bin/grep -vxF "$target" "$CDHIST_FILE" > "$tmp" && mv "$tmp" "$CDHIST_FILE"
       echo "deleted: $target"
       break
     else
@@ -316,6 +328,58 @@ zd() {
     fi
   done
 }
+
+# --- z コマンド専用：最適化された補完設定 --------------------------------
+
+# Bash用: 部分一致で候補を出す
+if [ -n "$BASH_VERSION" ]; then
+  _z_bash_completion() {
+    local cur="${COMP_WORDS[COMP_CWORD]}"
+    [ -f "$CDHIST_FILE" ] || return
+    local IFS=$'\n'
+    COMPREPLY=( $(grep -i "$cur" "$CDHIST_FILE" 2>/dev/null) )
+  }
+  complete -o bashdefault -F _z_bash_completion z
+fi
+
+# Zsh用: フルパスで補完（中間ディレクトリも候補に出る）
+if [ -n "$ZSH_VERSION" ]; then
+  _z_zsh_completion() {
+    emulate -L zsh
+    setopt localoptions no_aliases
+
+    [[ -f "$CDHIST_FILE" ]] || return
+
+    local cur="${words[CURRENT]}"
+    local -a full_paths matched
+
+    full_paths=("${(@f)$(<"$CDHIST_FILE")}")
+    matched=()
+
+    for path in $full_paths; do
+      [[ "$path" == *"$cur"* ]] && matched+=("$path")
+    done
+
+    (( ${#matched} == 0 )) && return
+
+    # フルパスをそのまま補完候補として渡す（中間ディレクトリも補完可能）
+    compadd -Q -U -V unsorted -- $matched
+  }
+
+  # compdef は compinit 完了後でないと使えないため遅延登録
+  if (( ${+functions[compdef]} )); then
+    compdef _z_zsh_completion z
+  else
+    autoload -Uz add-zsh-hook
+    _z_register_compdef() {
+      if (( ${+functions[compdef]} )); then
+        compdef _z_zsh_completion z
+        add-zsh-hook -d precmd _z_register_compdef
+      fi
+    }
+    add-zsh-hook precmd _z_register_compdef
+  fi
+fi
 
 # -- end simple zoxide-like cd (bash/zsh共通) --------------------------
 
