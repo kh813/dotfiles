@@ -1,0 +1,6 @@
+# .gitattributes
+.commonrc  text eol=lf
+.aliasrc   text eol=lf
+.privaterc text eol=lf
+*.sh       text eol=lf
+
