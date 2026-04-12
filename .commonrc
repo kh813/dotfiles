@@ -1,4 +1,4 @@
-# .common_shrc    : 2026/04/01
+# .commonrc    : 2026/04/12
 # 共通の設定ファイル - bash/zsh両方で使用
 
 # Environment variables
@@ -30,13 +30,14 @@ case "$(uname)" in
       # WSL固有の設定
       #echo "Running on WSL"
       # podman用設定
-      export DOCKER_HOST=unix:///run/user/$(id -u)/podman/podman.sock
+      #export DOCKER_HOST=unix:///run/user/$(id -u)/podman/podman.sock
+      :
     else
       # Linux固有の設定（WSL以外）
       #echo "Running on native Linux"
-	  :
+	    :
     fi
-    ;; # caseの分岐の終わりには ;; を付ける
+    ;; 
 
   "Darwin")
     # macOS固有の設定
@@ -45,17 +46,18 @@ case "$(uname)" in
     if [ -f "/opt/homebrew/bin/brew" ]; then
       eval "$(/opt/homebrew/bin/brew shellenv)"
     fi
-	# python@3.12
-	if [ -d "/opt/homebrew/opt/python@3.12/bin" ]; then
-      export PATH="/opt/homebrew/opt/python@3.12/bin:$PATH"
-	fi
+
+    # python@3.12
+    if [ -d "/opt/homebrew/opt/python@3.12/bin" ]; then
+        export PATH="/opt/homebrew/opt/python@3.12/bin:$PATH"
+    fi
     ;;
 
   "MINGW"*) # パターンマッチング
     # Windows (Git Bashなど) 固有の設定
     # 現状は特に設定なし
     ;;
-esac # case文の終わり
+esac 
 
 
 # -- 共通のオプション設定 -----------------------------------------------
@@ -76,6 +78,11 @@ export PATH="$PYENV_ROOT/bin:$PATH"
 # 3. pyenvを初期化
 if command -v pyenv 1>/dev/null 2>&1; then
   eval "$(pyenv init -)"
+fi
+
+# pipx
+if [ -d "${HOME}/.local/bin" ]; then
+  export PATH="$PATH:${HOME}/.local/bin"
 fi
 
 
@@ -101,9 +108,214 @@ if [ -d "${HOME}/.antigravity/antigravity/bin" ]; then
   export PATH="${HOME}/.antigravity/antigravity/bin:$PATH"
 fi
 
-# pipx
-if [ -d "${HOME}/.local/bin" ]; then
-  export PATH="$PATH:${HOME}/.local/bin"
+
+# -- simple zoxide-like cd (bash/zsh共通) -----------------------------
+#
+# [概要]
+#   軽量な zoxide 風ディレクトリジャンプ機能
+#   bash / zsh 両対応・依存なし・.cdhist のみ使用
+#
+# [ファイル]
+#   ~/.cdhist
+#     - 自動で訪問ディレクトリを記録
+#     - za コマンドで手動追加も可能
+#     - 最大30件まで保持（古いものは削除）
+#
+# [コマンド]
+#   cd <pattern>
+#     - 通常のcdが失敗した場合、履歴から曖昧検索して移動
+#     - 複数ワード対応（例: cd proj api）
+#
+#   z <pattern | number>
+#     - 履歴から曖昧検索してジャンプ
+#     - 数字指定で直接ジャンプ可能
+#     - 例:
+#         z dot
+#         z proj api
+#         z 1
+#
+#   za <dir>
+#     - ディレクトリを手動で履歴に追加（お気に入り登録）
+#     - 例: za ~/dotfiles
+#
+#   zl
+#     - 履歴一覧を表示（番号付き）
+#
+#   zd
+#     - 対話形式で履歴から削除
+#     - 番号選択で安全に削除
+#
+# [補完]
+#   z コマンドは TAB 補完に対応
+#     - ディレクトリ名（basename）で補完可能
+#       例: z dot<TAB>
+#     - 番号指定にも対応
+#       例: z 1<TAB>
+#
+# [仕様]
+#   - 最近使ったディレクトリが優先される（末尾が最新）
+#   - /tmp, /proc, /sys は記録しない
+#   - 初回起動時も現在ディレクトリを記録
+#
+# [注意]
+#   - スペースを含むパスは一部制限あり
+#   - 完全なスコアリング（頻度学習）は未実装
+#
+# ---------------------------------------------------------------------
+
+# ディレクトリ履歴ファイル
+export CDHIST_FILE="$HOME/.cdhist"
+
+# 履歴追加（重複削除＋最新を末尾へ）
+__cdhist_add() {
+  [ -d "$PWD" ] || return
+
+  # 無視したいディレクトリ
+  case "$PWD" in
+    /tmp*|/proc*|/sys*) return ;;
+  esac
+
+  # ファイルが無ければ作成
+  [ -f "$CDHIST_FILE" ] || touch "$CDHIST_FILE"
+
+  # 既存から削除して末尾へ
+  local tmp="${CDHIST_FILE}.$$"
+  grep -vxF "$PWD" "$CDHIST_FILE" > "$tmp" 2>/dev/null
+  echo "$PWD" >> "$tmp"
+  mv "$tmp" "$CDHIST_FILE"
+
+  # 履歴サイズ制限（30件）
+  local tmp="${CDHIST_FILE}.$$"
+  tail -n 30 "$CDHIST_FILE" > "$tmp" && mv "$tmp" "$CDHIST_FILE"
+}
+
+# bash: PROMPT_COMMANDに追加
+if [ -n "$BASH_VERSION" ]; then
+  case "$PROMPT_COMMAND" in
+    *__cdhist_add*) ;;
+    *)
+      PROMPT_COMMAND="__cdhist_add${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
+      ;;
+  esac
 fi
 
+# zsh: chpwd hook
+if [ -n "$ZSH_VERSION" ]; then
+  autoload -Uz add-zsh-hook 2>/dev/null
+  add-zsh-hook chpwd __cdhist_add 2>/dev/null
+fi
+
+# 初回ディレクトリ登録
+__cdhist_add
+
+# スマートcd
+cd() {
+  # 引数なし → HOME
+  if [ $# -eq 0 ]; then
+    builtin cd ~ || return
+    return
+  fi
+
+  # 通常のcdが成功するならそれを優先
+  if builtin cd "$1" 2>/dev/null; then
+    return
+  fi
+
+  # 履歴検索（複数ワード対応・最新優先）
+  local dest pattern
+  pattern="$*"
+
+  dest=$(grep -i "$pattern" "$CDHIST_FILE" 2>/dev/null | tail -n 1)
+
+  if [ -n "$dest" ]; then
+    builtin cd "$dest" || return
+  else
+    echo "cd: no match for '$pattern'"
+    return 1
+  fi
+}
+
+# z コマンド（ジャンプ）
+z() {
+  if [ $# -eq 0 ]; then
+    cd ~; return
+  fi
+
+  local pattern dest
+
+  # 数字なら直接参照
+  if [[ "$1" =~ ^[0-9]+$ ]]; then
+    dest=$(sed -n "${1}p" "$CDHIST_FILE")
+    [ -n "$dest" ] && cd "$dest" && return
+  fi
+
+  pattern="$*"
+  dest=$(grep -i "$pattern" "$CDHIST_FILE" 2>/dev/null | tail -n 1)
+
+  if [ -n "$dest" ]; then
+    cd "$dest"
+  else
+    echo "z: no match for '$pattern'"
+    return 1
+  fi
+}
+
+# za コマンド（追加）
+za() {
+  if [ $# -eq 0 ]; then
+    echo "usage: za <dir>"
+    return 1
+  fi
+
+  local dir="$1"
+
+  if [ -d "$dir" ]; then
+    dir="$(cd "$dir" && pwd)"
+  fi
+
+  if [ ! -d "$dir" ]; then
+    echo "za: not a directory: $1"
+    return 1
+  fi
+
+  grep -qxF "$dir" "$CDHIST_FILE" 2>/dev/null || echo "$dir" >> "$CDHIST_FILE"
+}
+
+# zl コマンド（一覧）
+zl() {
+  nl "$CDHIST_FILE"
+}
+
+# zd コマンド（対話削除）
+zd() {
+  if [ ! -f "$CDHIST_FILE" ]; then
+    echo "zd: no history file"
+    return 1
+  fi
+
+  local list=()
+
+  while IFS= read -r line; do
+    list+=("$line")
+  done < "$CDHIST_FILE"
+
+  if [ ${#list[@]} -eq 0 ]; then
+    echo "zd: empty"
+    return 1
+  fi
+
+  echo "Select entry to delete:"
+  select target in "${list[@]}"; do
+    if [ -n "$target" ]; then
+      local tmp="${CDHIST_FILE}.$$"
+      grep -vxF "$target" "$CDHIST_FILE" > "$tmp" && mv "$tmp" "$CDHIST_FILE"
+      echo "deleted: $target"
+      break
+    else
+      echo "invalid selection"
+    fi
+  done
+}
+
+# -- end simple zoxide-like cd (bash/zsh共通) --------------------------
 

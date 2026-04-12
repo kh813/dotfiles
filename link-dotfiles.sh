@@ -15,12 +15,12 @@ else
 	echo "[=] .bashrc exists"
 fi
 
-#if [ ! -e ~/.bash_profile ]; then
-#	ln -sf ~/dotfiles/.bash_profile ~/.bash_profile
-#	echo "[+] .bash_profile linked"
-#else
-#	echo "[=] .bash_profile exists"
-#fi
+if [ ! -e ~/.bash_profile ]; then
+	ln -sf ~/dotfiles/.bash_profile ~/.bash_profile
+	echo "[+] .bash_profile linked"
+else
+	echo "[=] .bash_profile exists"
+fi
 
 # zsh
 # if [ ! -e ~/.zprofile ]; then

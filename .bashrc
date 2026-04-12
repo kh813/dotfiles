@@ -1,4 +1,4 @@
-# .bashrc : 2026/04/05
+# .bashrc : 2026/04/12
 
 # If not running interactively, don't do anything
 [[ "$-" != *i* ]] && return
@@ -14,41 +14,46 @@ blue_p="\[\e[34m\]"
 green_p="\[\e[32m\]"
 reset_p="\[\e[0m\]"
 
-build_prompt() {
-  local symbol="$"
-  [[ $UID -eq 0 ]] && symbol="#"
-  local cur_dir="${PWD/$HOME/\~}"
-  local r_str="[ $cur_dir ]"
-  local r_len=${#r_str}
-  printf "\n\033[999C\033[${r_len}D\033[33m%s\033[0m\r" "$r_str"
-  PS1="${blue_p}\u${reset_p}@${green_p}\h${reset_p} ${symbol} "
-}
-PROMPT_COMMAND=build_prompt
+if [ "${BASH_VERSINFO[0]}" -ge 4 ]; then
+  # ===== Bash 4+: 右プロンプト + transient =====
+  _RPROMPT_LEN=0
 
-# OSごとのプロンプト設定
-if [ "Linux" = "$(uname)" ]; then
-  # Linux (Bash 4+): DEBUGトラップをbuild_promptの外で永続設定
-  # コマンド実行直前に右プロンプト行（1行上）を消去する
   _rprompt_erase() {
-    # PROMPT_COMMAND自身の実行はトラップしない
-    [[ "${BASH_COMMAND}" == "build_prompt" ]] && return
-    echo -ne "\e[1A\e[2K\r"
+    [[ "${BASH_COMMAND}" == "_build_prompt" ]] && return
+    (( _RPROMPT_LEN > 0 )) && \
+      printf "\033[999C\033[%dD\033[K\r" "$_RPROMPT_LEN"
   }
   trap '_rprompt_erase' DEBUG
 
-elif [ "Darwin" = "$(uname)" ]; then
-  # Mac (Bash 3.2): build_promptをそのまま使用
-  # DEBUGトラップはBash 3.2では動作が不安定なため使わない
-  # → 右プロンプトは「残る」仕様とする（消去は行わない）
-  export BASH_SILENCE_DEPRECATION_WARNING=1
-  
-  # cleanprompt で右プロンプトなしに切替、dirprompt で元に戻す
-  hidepwd() { PROMPT_COMMAND=''; PS1="${blue_p}\u${reset_p}@${green_p}\h${reset_p} \$ "; }
-  showpwd()   { PROMPT_COMMAND=build_prompt; }
+  _build_prompt() {
+    local symbol="$"
+    [[ $UID -eq 0 ]] && symbol="#"
+    local cur_dir="${PWD/$HOME/\~}"
+    local r_str="[ ${cur_dir} ]"
+    _RPROMPT_LEN=${#r_str}
+    printf "\033[999C\033[%dD[ \033[33m%s\033[0m ]\r" "$r_len" "$cur_dir"
+    PS1="${blue_p}\u${reset_p}@${green_p}\h${reset_p} ${symbol} "
+  }
 
-elif [[ "$(uname)" = MINGW* ]]; then
-  :
+else
+  # ===== Bash 3.x: 右プロンプトあり（transientなし）=====
+  [[ "$(uname)" == "Darwin" ]] && export BASH_SILENCE_DEPRECATION_WARNING=1
+
+  _build_prompt() {
+    local symbol="$"
+    [[ $UID -eq 0 ]] && symbol="#"
+    local cur_dir="${PWD/$HOME/~}"
+    local r_str="[ ${cur_dir} ]"
+    local r_len=${#r_str}
+    printf "\033[999C\033[%dD[ \033[33m%s\033[0m ]\r" "$r_len" "$cur_dir"
+    PS1="${blue_p}\u${reset_p}@${green_p}\h${reset_p} ${symbol} "
+  }
 fi
+
+# 共通設定
+PROMPT_COMMAND=_build_prompt
+hwd() { PROMPT_COMMAND=''; PS1="${blue_p}\u${reset_p}@${green_p}\h${reset_p} \$ "; }
+swd() { PROMPT_COMMAND=_build_prompt; }
 # --- End PROMPT ---
 
 
