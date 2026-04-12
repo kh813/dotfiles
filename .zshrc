@@ -11,6 +11,7 @@ fi
 autoload -Uz colors && colors
 
 # プロンプト（OS共通）
+ZLE_RPROMPT_INDENT=0
 PROMPT="%{${fg[blue]}%}%n%{${reset_color}%}@%{${fg[green]}%}%m%{${reset_color}%} %# "
 RPROMPT="[ %{${fg[yellow]}%}%~%{${reset_color}%} ]"
 

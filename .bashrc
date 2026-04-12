@@ -29,9 +29,12 @@ if [ "${BASH_VERSINFO[0]}" -ge 4 ]; then
     local symbol="$"
     [[ $UID -eq 0 ]] && symbol="#"
     local cur_dir="${PWD/$HOME/\~}"
-    local r_str="[ ${cur_dir} ]"
-    _RPROMPT_LEN=${#r_str}
-    printf "\033[999C\033[%dD[ \033[33m%s\033[0m ]\r" "$r_len" "$cur_dir"
+    local r_len=$(( ${#cur_dir} + 4 ))
+    local col=$(( COLUMNS - r_len ))
+    (( _RPROMPT_LEN > 0 )) && \
+      printf "\033[%dG\033[K" $(( COLUMNS - _RPROMPT_LEN + 1 ))
+    _RPROMPT_LEN=$r_len
+    printf "\033[%dG[ \033[33m%s\033[0m ]\r" "$(( col + 1 ))" "$cur_dir"
     PS1="${blue_p}\u${reset_p}@${green_p}\h${reset_p} ${symbol} "
   }
 
@@ -43,9 +46,10 @@ else
     local symbol="$"
     [[ $UID -eq 0 ]] && symbol="#"
     local cur_dir="${PWD/$HOME/~}"
-    local r_str="[ ${cur_dir} ]"
-    local r_len=${#r_str}
-    printf "\033[999C\033[%dD[ \033[33m%s\033[0m ]\r" "$r_len" "$cur_dir"
+    local cols=${COLUMNS:-$(tput cols)}
+    local r_len=$(( ${#cur_dir} + 4 ))
+    local col=$(( cols - r_len ))
+    printf "\033[%dG[ \033[33m%s\033[0m ]\r" "$(( col + 1 ))" "$cur_dir"
     PS1="${blue_p}\u${reset_p}@${green_p}\h${reset_p} ${symbol} "
   }
 fi
