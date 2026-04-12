@@ -38,6 +38,18 @@ if [ "${BASH_VERSINFO[0]}" -ge 4 ]; then
     PS1="${blue_p}\u${reset_p}@${green_p}\h${reset_p} ${symbol} "
   }
 
+  # \C-m → 未使用キー（\C-o）に付け替え
+  # \C-o → _transient_enter（関数） → \C-o は元々 operate-and-get-next
+  # という多段は複雑なので、シンプルに：
+  _transient_enter() {
+    (( _RPROMPT_LEN > 0 )) && \
+      printf "\033[999C\033[%dD\033[K\r" "$_RPROMPT_LEN" > /dev/tty
+  }
+  # \C-m に「_transient_enter を実行してから accept-line」を設定
+  bind -x '"\C-x\C-e": _transient_enter'   # 未使用キーに関数を割り当て
+  bind '"\C-m": "\C-x\C-e\C-j"'            # Enter → 関数起動 → \C-j（accept-line）
+  bind '"\C-j": accept-line'               # \C-j は素のaccept-line（再帰しない）
+
 else
   # ===== Bash 3.x: 右プロンプトあり（transientなし）=====
   [[ "$(uname)" == "Darwin" ]] && export BASH_SILENCE_DEPRECATION_WARNING=1
@@ -119,7 +131,7 @@ shopt -s histappend
 # History Options
 #
 # Don't put duplicate lines in the history.
-export HISTCONTROL=$HISTCONTROL${HISTCONTROL+,}ignoredups
+export HISTCONTROL=$HISTCONTROL${HISTCONTROL+,}ignoredups:ignorespace
 #
 # Ignore some controlling instructions
 # HISTIGNORE is a colon-delimited list of patterns which should be excluded.
