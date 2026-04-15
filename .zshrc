@@ -1,4 +1,4 @@
-# .zshrc : 2026/04/01
+# .zshrc : 2026/04/14
 
 # 共通設定の読み込み
 if [ -f "${HOME}/.commonrc" ]; then
@@ -37,7 +37,7 @@ HISTSIZE=2000
 SAVEHIST=2000
 
 # 便利なオプション
-setopt auto_cd              # ディレクトリ名のみでcdする
+#setopt auto_cd              # ディレクトリ名のみでcdする（zoxide-like cd と競合するため無効化）
 setopt auto_pushd           # cd時にディレクトリスタックにプッシュ
 setopt pushd_ignore_dups    # 重複したディレクトリをスタックに追加しない
 setopt share_history        # 複数のzshセッション間でヒストリを共有

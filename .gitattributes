@@ -1,6 +1,23 @@
 # .gitattributes
-.commonrc  text eol=lf
-.aliasrc   text eol=lf
-.privaterc text eol=lf
-*.sh       text eol=lf
 
+# shell config
+.bashrc         text eol=lf
+.bash_profile   text eol=lf
+.bash_logout    text eol=lf
+.zshrc          text eol=lf
+.zshenv         text eol=lf
+.zprofile       text eol=lf
+.zlogout        text eol=lf
+.profile        text eol=lf
+.commonrc       text eol=lf
+.aliasrc        text eol=lf
+.privaterc      text eol=lf
+*.sh            text eol=lf
+
+# editor / tools
+.vimrc          text eol=lf
+.gitconfig      text eol=lf
+.gitignore      text eol=lf
+.gitattributes  text eol=lf
+.editorconfig   text eol=lf
+.tmux.conf      text eol=lf

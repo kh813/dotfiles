@@ -1,4 +1,4 @@
-# .commonrc    : 2026/04/12
+# .commonrc    : 2026/04/14
 # 共通の設定ファイル - bash/zsh両方で使用
 
 # Environment variables
@@ -35,9 +35,9 @@ case "$(uname)" in
     else
       # Linux固有の設定（WSL以外）
       #echo "Running on native Linux"
-	    :
+      :
     fi
-    ;; 
+    ;;
 
   "Darwin")
     # macOS固有の設定
@@ -49,7 +49,7 @@ case "$(uname)" in
 
     # python@3.12
     if [ -d "/opt/homebrew/opt/python@3.12/bin" ]; then
-        export PATH="/opt/homebrew/opt/python@3.12/bin:$PATH"
+      export PATH="/opt/homebrew/opt/python@3.12/bin:$PATH"
     fi
     ;;
 
@@ -57,7 +57,7 @@ case "$(uname)" in
     # Windows (Git Bashなど) 固有の設定
     # 現状は特に設定なし
     ;;
-esac 
+esac
 
 
 # -- 共通のオプション設定 -----------------------------------------------
@@ -100,7 +100,7 @@ fi
 
 # Added by LM Studio CLI (lms)
 if [ -d "${HOME}/.lmstudio/bin" ]; then
-    export PATH="$PATH:${HOME}/.lmstudio/bin"
+  export PATH="$PATH:${HOME}/.lmstudio/bin"
 fi
 
 # Google Antigravity
@@ -145,12 +145,17 @@ fi
 #     - 対話形式で履歴から削除
 #     - 番号選択で安全に削除
 #
+#   zi
+#     - 対話形式で履歴からジャンプ
+#     - 履歴を一覧表示し、番号選択で移動
+#
 # [補完]
 #   z コマンドは TAB 補完に対応
-#     - ディレクトリ名（basename）で補完可能
-#       例: z dot<TAB>
+#     - フルパスで補完（中間ディレクトリも補完可能）
+#       例: z dev<TAB> → /Users/hiroshi/dev-mac 等が候補に
 #     - 番号指定にも対応
 #       例: z 1<TAB>
+#   cd コマンドは標準補完（_cd）を使用
 #
 # [仕様]
 #   - 最近使ったディレクトリが優先される（末尾が最新）
@@ -166,15 +171,6 @@ fi
 # ディレクトリ履歴ファイル
 export CDHIST_FILE="$HOME/.cdhist"
 
-# 外部コマンドのパスを明示（サブシェル起動時のPATH未設定対策）
-__cdhist_ensure_path() {
-  case ":$PATH:" in
-    *:/usr/bin:*) ;;
-    *) export PATH="/usr/bin:/bin:/usr/sbin:/sbin:$PATH" ;;
-  esac
-}
-__cdhist_ensure_path
-
 # 履歴追加（重複削除＋最新を末尾へ）
 __cdhist_add() {
   [ -d "$PWD" ] || return
@@ -189,9 +185,10 @@ __cdhist_add() {
 
   # 既存から削除して末尾へ追加し、30件に制限
   local tmp="${CDHIST_FILE}.$$"
-  { /usr/bin/grep -vxF "$PWD" "$CDHIST_FILE" 2>/dev/null
+  { grep -vxF "$PWD" "$CDHIST_FILE" 2>/dev/null
     echo "$PWD"
-  } | /usr/bin/tail -n 30 > "$tmp" && mv "$tmp" "$CDHIST_FILE"
+  } | tail -n 30 > "$tmp"
+  [ -s "$tmp" ] && mv "$tmp" "$CDHIST_FILE" || rm -f "$tmp"
 }
 
 # bash: PROMPT_COMMANDに追加
@@ -228,7 +225,7 @@ cd() {
 
   # 履歴検索（複数ワード対応・最新優先）
   local dest
-  dest=$(/usr/bin/grep -i "$*" "$CDHIST_FILE" 2>/dev/null | /usr/bin/tail -n 1)
+  dest=$(grep -i "$*" "$CDHIST_FILE" 2>/dev/null | tail -n 1)
 
   if [ -n "$dest" ]; then
     builtin cd "$dest" || return
@@ -240,7 +237,6 @@ cd() {
 
 # z コマンド（ジャンプ）
 z() {
-  __cdhist_ensure_path 
   if [ $# -eq 0 ]; then
     cd ~; return
   fi
@@ -251,12 +247,12 @@ z() {
   case "$1" in
     ''|*[!0-9]*)  ;;
     *)
-      dest=$(/usr/bin/sed -n "${1}p" "$CDHIST_FILE")
+      dest=$(sed -n "${1}p" "$CDHIST_FILE")
       [ -n "$dest" ] && cd "$dest" && return
       ;;
   esac
 
-  dest=$(/usr/bin/grep -i "$*" "$CDHIST_FILE" 2>/dev/null | /usr/bin/tail -n 1)
+  dest=$(grep -i "$*" "$CDHIST_FILE" 2>/dev/null | tail -n 1)
 
   if [ -n "$dest" ]; then
     cd "$dest"
@@ -285,11 +281,12 @@ za() {
   fi
 
   # 重複チェック＋30件制限
-  if ! /usr/bin/grep -qxF "$dir" "$CDHIST_FILE" 2>/dev/null; then
+  if ! grep -qxF "$dir" "$CDHIST_FILE" 2>/dev/null; then
     local tmp="${CDHIST_FILE}.$$"
     { cat "$CDHIST_FILE" 2>/dev/null
       echo "$dir"
-    } | /usr/bin/tail -n 30 > "$tmp" && mv "$tmp" "$CDHIST_FILE"
+    } | tail -n 30 > "$tmp"
+    [ -s "$tmp" ] && mv "$tmp" "$CDHIST_FILE" || rm -f "$tmp"
   fi
 }
 
@@ -320,13 +317,30 @@ zd() {
   select target in "${list[@]}"; do
     if [ -n "$target" ]; then
       local tmp="${CDHIST_FILE}.$$"
-      /usr/bin/grep -vxF "$target" "$CDHIST_FILE" > "$tmp" && mv "$tmp" "$CDHIST_FILE"
+      grep -vxF "$target" "$CDHIST_FILE" > "$tmp"
+      [ -f "$tmp" ] && mv "$tmp" "$CDHIST_FILE" || rm -f "$tmp"
       echo "deleted: $target"
       break
     else
       echo "invalid selection"
     fi
   done
+}
+
+# zi コマンド（インタラクティブジャンプ・fzf必須）
+zi() {
+  if ! command -v fzf >/dev/null 2>&1; then
+    echo "zi: fzf is not installed. Run: brew install fzf / apt install fzf"
+    return 1
+  fi
+
+  local dest
+  dest=$(cat "$CDHIST_FILE" 2>/dev/null | fzf --height 40% --reverse --prompt="cd> " --no-info)
+  #dest=$(cat "$CDHIST_FILE" 2>/dev/null | fzf --height 40% --reverse --prompt="cd> ")
+
+  if [ -n "$dest" ]; then
+    cd "$dest"
+  fi
 }
 
 # --- z コマンド専用：最適化された補完設定 --------------------------------
@@ -347,6 +361,7 @@ if [ -n "$ZSH_VERSION" ]; then
   _z_zsh_completion() {
     emulate -L zsh
     setopt localoptions no_aliases
+    local PATH="$PATH"  # emulate -L zsh によるPATHリセットを防ぐ
 
     [[ -f "$CDHIST_FILE" ]] || return
 
@@ -366,14 +381,16 @@ if [ -n "$ZSH_VERSION" ]; then
     compadd -Q -U -V unsorted -- $matched
   }
 
-  # compdef は compinit 完了後でないと使えないため遅延登録
+  # compinit済みなら即登録、未済なら precmd で遅延登録
   if (( ${+functions[compdef]} )); then
     compdef _z_zsh_completion z
+    compdef _cd cd
   else
     autoload -Uz add-zsh-hook
     _z_register_compdef() {
       if (( ${+functions[compdef]} )); then
         compdef _z_zsh_completion z
+        compdef _cd cd
         add-zsh-hook -d precmd _z_register_compdef
       fi
     }
@@ -382,4 +399,3 @@ if [ -n "$ZSH_VERSION" ]; then
 fi
 
 # -- end simple zoxide-like cd (bash/zsh共通) --------------------------
-
